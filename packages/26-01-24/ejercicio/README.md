@@ -16,5 +16,3 @@ SECRETKEY=""
 ```bash
 $ npm run dev
 ```
-
-## Endpoints definidos
