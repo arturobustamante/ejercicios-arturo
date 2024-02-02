@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+package-lock.json
+packages/26-01-24/ejercicio/node_modules/
+packages/26-01-24/ejercicio/.DS_Store
+packages/26-01-24/ejercicio/ package-lock.json
+packages/26-01-24/ejercicio/.env
+packages/26-01-24/ejercicio/users.json
