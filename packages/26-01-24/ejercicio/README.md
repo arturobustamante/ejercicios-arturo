@@ -8,13 +8,16 @@ $ npm i
 ## Configuracion
 Renombrar el archivo env.dist a .env e inicializar las variables:
 ```txt
+PORT=3001
 SALT=""
 SECRETKEY=""
+DATABASE=""
+USERDB=""
+PASSWDB=""
+HOSTDB=""
 ```
 
 ## Ejecucion
 ```bash
 $ npm run dev
 ```
-
-## Endpoints definidos

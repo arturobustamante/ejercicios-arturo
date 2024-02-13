@@ -2,18 +2,13 @@ const crypto = require('crypto')
 const fs = require('fs');
 const express = require('express');
 const jwt = require('jsonwebtoken');
-require('dotenv').config()
-
-const USERS_FILE = "./users.json";
+require('dotenv').config();
+const sequelize = require('./config');
+const User = require('./model');
+const UserZod = require('./user_zod');
 
 const app = express();
-
 app.use(express.json());
-
-// Crea el archivo json si no lo encuentra y le asigna un array vacio
-if (!fs.existsSync(USERS_FILE)) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify([]));
-}
 
 // Middleware para verificar la valides del token, la funcion jwt.verify ademas de validar
 // el valor del token verifica que el token no haya expirado
@@ -28,7 +23,6 @@ function verifyToken(req, res, next) {
   }
 };
 
-
 /* /users:
  * post:
  *  parameters:
@@ -37,29 +31,37 @@ function verifyToken(req, res, next) {
  *    password: Password del usuario
  * 
  */
-app.post("/users", verifyToken, (req, res) => {
-  const newUser = req.body;
-  fs.readFile(USERS_FILE, (err, data) => {
-    if (err) {
-      res.status(500).json({error: "Error al leer el archivo"});
-      return;
-    }
-    let users = JSON.parse(data);
-
+app.post("/users", verifyToken, async (req, res) => {
+  let newUser = req.body;
+  try {
+    UserZod.parse(newUser);
     const pwd = crypto.scryptSync(newUser.password, process.env.SALT, 10);
-    let fullUser = { id: crypto.randomUUID(), rol: "guest", ...newUser };
-    fullUser["password"] = pwd.toString("base64");
-    users.push(fullUser);
-    
-    fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), (err) => {
-      if (err) {
-        res.status(500).json({error: "Error al guardar el usuario"});
-      } else {
-        res.status(200).json({message: "Usuario creado exitosamente"});
-      }
+    newUser.password = pwd.toString("base64");
+    const user = await User.create(newUser);
+
+    res.json({
+      message: 'Usuario creado',
+      data: user
     });
-  });
+  } catch (error) {
+    let msgErrors = [];
+    for(e in error.errors){
+      msgErrors.push(error.errors[e].message);
+    }
+    res.status(400).json(msgErrors);
+  }
 });
+
+/* /users:
+ * get:
+ *  parameters:
+ * Retorna el listado de todos los usuarios
+ */
+app.get("/users", verifyToken, async(req, res) => {
+  const users = await User.findAll();
+  res.json(users);
+});
+
 
 /* /login:
  * post:
@@ -68,37 +70,26 @@ app.post("/users", verifyToken, (req, res) => {
  *    password: Password del usuario
  * 
  */
-app.post("/login", (req, res) => {
+app.post("/login", async(req, res) => {
   const userIntentLogin = req.body;
-  fs.readFile(USERS_FILE, (err, data) => {
-    if (err) {
-      res.status(500).json({error: "Error al leer el archivo"});
-      return;
-    }
-    const users = JSON.parse(data);
-    const user = users.find((u) => {
-      const pwd = crypto.scryptSync(userIntentLogin.password, process.env.SALT, 10);
-      if(u.user === userIntentLogin.user && pwd.toString("base64") === u.password) {
-        return u;
-      }
-    }); 
+  const pwd = crypto.scryptSync(userIntentLogin.password, process.env.SALT, 10);
+  const user = await User.findOne({ where: { email: userIntentLogin.email, password: pwd.toString("base64") } });
     
-    if(user){
-      const token = jwt.sign(
-        { user: user.user, rol: user.rol },
-        process.env.SECRETKEY, 
-        { expiresIn: '1h', }
-        );
-      return res.status(200).json({ token });
-    }
-    else {
-      return res.status(404).jsonr({error: "Usuario invalido"});
-    }
-  });
+  if (user) {
+    const token = jwt.sign(
+      { name: user.name, email: user.email },
+      process.env.SECRETKEY,
+      { expiresIn: '1h', }
+    );
+    return res.status(200).json({ token });
+  }
+  else {
+    return res.status(404).json({ error: "Usuario invalido" });
+  }
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
+sequelize.sync({ alter: false }).then(() => {
+  app.listen(process.env.PORT, () => {
+    console.log(`El servidor está escuchando en el puerto ${process.env.PORT}`)
+  })
 });
-
